@@ -1,0 +1,856 @@
+
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - loaders - OBJ MTL loader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				color: #61443e;
+				font-family:Monospace;
+				font-size:13px;
+				text-align:center;
+
+				background-color: #bfd1e5;
+				margin: 0px;
+				overflow: hidden;
+			}
+
+			#info {
+				position: absolute;
+				top: 0px; width: 100%;
+				padding: 5px;
+			}
+
+			a {
+
+				color: #a06851;
+			}
+
+		</style>
+	</head>
+
+	<body>
+
+		<!-- threejs JS -->	
+		<script src="js/three.js"></script>		
+		<script src="js/OBJLoader.js"></script>		
+		<script src="js/Detector.js"></script>
+		<script src="js/stats.min.js"></script>
+		<script src="js/MD2CharacterComplex.js"></script>
+		
+		<!-- other JS -->
+		<script src="js/jquery.js"></script>
+		
+		<!-- my JS -->		
+		<script src="js/KeyboardInput.js"></script>
+		<script src="js/LoadXML.js"></script>
+		<script src="js/Sound.js"></script>
+		<script src="js/Animation.js"></script>
+		<script src="js/TwoDAssets.js"></script>
+		<script src="js/GUI.js"></script>
+		<script src="js/Menu.js"></script>
+		<script src="js/MD2Animation.js"></script>
+		<!--<script src="LoadAssets.js"></script>-->
+
+		<script>
+		
+			// bounding box type/ struct
+			BoundingBox = function ( xMin, yMin, zMin, xMax, yMax, zMax ) {
+
+				this.xMin = xMin || 0;
+				this.yMin = yMin || 0;
+				this.zMin = zMin || 0;
+				
+				this.xMax = xMax || 0;
+				this.yMax = yMax || 0;
+				this.zMax = zMax || 0;
+
+			};
+			
+			var GameState = {
+				Loading: 0,
+				Menu: 1,
+				Game: 2				
+			};
+			var gState = GameState.Loading;
+			
+			var manager;
+		
+			var container, stats;
+			
+			var groundIntersect;
+			
+			// camera
+			var camera;
+			var cameraPos = new THREE.Vector3(800, 1200, 800); // should be 800, 1200, 800
+			//var cameraRot = new THREE.Vector3(0, 45, 0);
+			
+			// models
+			var noOfModels = 5000;
+			var model = new Array();
+			var modelOrigBox = new Array();
+			for (var i = 0; i < noOfModels; i++)
+				modelOrigBox[i] = new BoundingBox(0,0,0,0,0,0);
+			var modelBox = new Array();
+			for (var i = 0; i < noOfModels; i++)
+				modelBox[i] = new BoundingBox(0,0,0,0,0,0);
+			var objectPos = new Array();
+			objectPos[0] = new THREE.Vector3(0, 0, 0);
+			objectPos[1] = new THREE.Vector3(200, 0, -1000);
+			
+			// resolution
+			var resolutionX = 1280; 
+			var resolutionY = 720
+			var scaleX, scaleY;
+
+			// scene and renderer
+			var scene, renderer;
+
+			var mouseX = 0, mouseY = 0;
+
+			// classes
+			var loadXML = new LoadXML();
+			var twoDAssets = new TwoDAssets();
+			var gui = new GUI();
+			var menu = new Menu();
+			
+			// sound
+			var sound1, sound2;
+			
+			// animation
+			var myAnimation;
+			
+			//MD2Animation
+			var myMD2Animation;
+			var bystander;
+
+			var bystander2;
+			var bystander3;
+			var bystander4;
+
+			
+			var clock = new THREE.Clock();
+			
+			// initialise gameplay stuff
+			var gameSetUp = false;
+								
+			init();		
+			main();
+			
+			function loadAssets(){
+				// TwoDAssets
+				twoDAssets.loadAssets();
+					
+			}
+
+			function init() {	
+			
+				// set scale via resolution
+				scaleX = window.innerWidth / resolutionX;
+				scaleY = window.innerHeight / resolutionY;
+				
+				// load assets
+				loadAssets();							
+			
+				// load xml
+				//loadXML.ReadXML("GameObjects.xml");
+			
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				// camera
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 20000 );
+				camera.position = cameraPos;
+				//camera.rotation = cameraRot;
+
+				// scene
+				scene = new THREE.Scene();
+				
+				// create 3d sound 
+				var sphere = new THREE.SphereGeometry( 20, 32, 16 );
+
+				material_sphere1 = new THREE.MeshLambertMaterial( { color: 0xffaa00, shading: THREE.FlatShading } );
+				material_sphere2 = new THREE.MeshLambertMaterial( { color: 0xff2200, shading: THREE.FlatShading } );
+				
+				// sound 1
+				var mesh1 = new THREE.Mesh( sphere, material_sphere1 );
+				mesh1.position.set( -2000, 30, 0 );
+				//scene.add( mesh1 );
+
+				//sound1 = new Sound(['Sounds/Rise Against - Prayer Of The Refugee.mp3', 'Sounds/Rise Against - Prayer Of The Refugee.ogg'], 3000, mesh1.position, 1);
+				//sound1.Loop();
+				//sound1.Play();
+				
+				// sound 2
+				var mesh2 = new THREE.Mesh( sphere, material_sphere2 );
+				mesh2.position.set( 2000, 30, 0 );
+				//scene.add( mesh2 );
+
+				//sound2 = new Sound(['Sounds/Jimmy Eat World - The Middle.mp3', 'Sounds/Jimmy Eat World - The Middle.ogg'], 3000, mesh2.position, 1);
+				//sound2.Loop();
+				//sound2.Play();
+
+				// lightng
+				var ambient = new THREE.AmbientLight( 0x101030 );
+				scene.add( ambient );
+
+				var directionalLight = new THREE.DirectionalLight( 0xffeedd );
+				directionalLight.position.set( 0, 5, 1 ).normalize();
+				scene.add( directionalLight );
+				
+				// loader manager
+				manager = new THREE.LoadingManager();
+				manager.onProgress = function ( item, loaded, total ) {
+
+					console.log( item, loaded, total );
+
+				};
+				
+				// terrain
+				createTerrain();
+
+				
+				// load models
+
+				noOfModels=0;
+				for (var i = 0; i < 1; i++){
+					//loadModel(i, 'Models/Player/male02.obj', 'Models/Player/ash_uvgrid01.jpg', objectPos[i]);
+					//noOfModels++;
+					
+					//e_blacksmith_asset_001.obj
+
+				}
+
+				//loadModel2(0, 'Models/E_Low_Poly_Terrain_001.obj', 'Textures/Scene/E_Terrain_Diffuse_001.png', objectPos[1]);
+
+				loadModel(1, 'Models/Scene/e_blacksmith_asset_001.obj', 'Textures/Scene/e_blacksmith_diffuse.png', objectPos[0]);
+
+				loadModel(2, 'Models/Scene/e_chimney01_asset_001.obj', 'Textures/Scene/e_chimney01_diffuse.png', objectPos[0]);
+				loadModel(3, 'Models/Scene/e_chimney01_asset_002.obj', 'Textures/Scene/e_chimney01_diffuse.png', objectPos[0]);
+				loadModel(4, 'Models/Scene/e_chimney01_asset_003.obj', 'Textures/Scene/e_chimney01_diffuse.png', objectPos[0]);
+				loadModel(5, 'Models/Scene/e_chimney01_asset_004.obj', 'Textures/Scene/e_chimney01_diffuse.png', objectPos[0]);
+				loadModel(6, 'Models/Scene/e_chimney01_asset_005.obj', 'Textures/Scene/e_chimney01_diffuse.png', objectPos[0]);
+				loadModel(7, 'Models/Scene/e_chimney01_asset_006.obj', 'Textures/Scene/e_chimney01_diffuse.png', objectPos[0]);
+
+				loadModel(8, 'Models/Scene/e_granary_asset_001.obj', 'Textures/Scene/e_granary_diffuse.png', objectPos[0]);
+
+				loadModel(9, 'Models/Scene/e_porch01_asset_001.obj', 'Textures/Scene/e_porch01_diffuse.png', objectPos[0]);
+				loadModel(10, 'Models/Scene/e_porch01_asset_002.obj', 'Textures/Scene/e_porch01_diffuse.png', objectPos[0]);
+
+				loadModel(11, 'Models/Scene/e_porch02_asset_001.obj', 'Textures/Scene/e_porch02_diffuse.png', objectPos[0]);
+				loadModel(12, 'Models/Scene/e_porch02_asset_002.obj', 'Textures/Scene/e_porch02_diffuse.png', objectPos[0]);
+				loadModel(13, 'Models/Scene/e_porch02_asset_003.obj', 'Textures/Scene/e_porch02_diffuse.png', objectPos[0]);
+				loadModel(14, 'Models/Scene/e_porch02_asset_004.obj', 'Textures/Scene/e_porch02_diffuse.png', objectPos[0]);
+				loadModel(15, 'Models/Scene/e_porch02_asset_005.obj', 'Textures/Scene/e_porch02_diffuse.png', objectPos[0]);
+
+				loadModel(16, 'Models/Scene/e_roof01_asset_001.obj', 'Textures/Scene/e_roof01_diffuse.png', objectPos[0]);
+				loadModel(17, 'Models/Scene/e_roof01_asset_002.obj', 'Textures/Scene/e_roof01_diffuse.png', objectPos[0]);
+				loadModel(18, 'Models/Scene/e_roof01_asset_003.obj', 'Textures/Scene/e_roof01_diffuse.png', objectPos[0]);
+				loadModel(19, 'Models/Scene/e_roof01_asset_004.obj', 'Textures/Scene/e_roof01_diffuse.png', objectPos[0]);
+				loadModel(20, 'Models/Scene/e_roof01_asset_005.obj', 'Textures/Scene/e_roof01_diffuse.png', objectPos[0]);
+
+				loadModel(21, 'Models/Scene/e_roof02_asset_001.obj', 'Textures/Scene/e_roof02_diffuse.png', objectPos[0]);
+				loadModel(22, 'Models/Scene/e_roof02_asset_002.obj', 'Textures/Scene/e_roof02_diffuse.png', objectPos[0]);
+
+				loadModel(23, 'Models/Scene/e_roof03_asset_001.obj', 'Textures/Scene/e_roof03_diffuse.png', objectPos[0]);
+				loadModel(24, 'Models/Scene/e_roof03_asset_002.obj', 'Textures/Scene/e_roof03_diffuse.png', objectPos[0]);
+
+				loadModel(23, 'Models/Scene/e_roof04_asset_001.obj', 'Textures/Scene/e_roof04_diffuse.png', objectPos[0]);
+				loadModel(24, 'Models/Scene/e_roof04_asset_002.obj', 'Textures/Scene/e_roof04_diffuse.png', objectPos[0]);
+
+				loadModel(25, 'Models/Scene/e_walls01_asset_001.obj', 'Textures/Scene/e_walls01_diffuse.png', objectPos[0]);
+				loadModel(26, 'Models/Scene/e_walls01_asset_002.obj', 'Textures/Scene/e_walls01_diffuse.png', objectPos[0]);
+				loadModel(27, 'Models/Scene/e_walls01_asset_003.obj', 'Textures/Scene/e_walls01_diffuse.png', objectPos[0]);
+				loadModel(28, 'Models/Scene/e_walls01_asset_004.obj', 'Textures/Scene/e_walls01_diffuse.png', objectPos[0]);
+				loadModel(29, 'Models/Scene/e_walls01_asset_005.obj', 'Textures/Scene/e_walls01_diffuse.png', objectPos[0]);
+				loadModel(30, 'Models/Scene/e_walls01_asset_006.obj', 'Textures/Scene/e_walls01_diffuse.png', objectPos[0]);
+
+				loadModel(31, 'Models/Scene/e_walls02_asset_001.obj', 'Textures/Scene/e_walls02_diffuse.png', objectPos[0]);
+				loadModel(32, 'Models/Scene/e_walls02_asset_002.obj', 'Textures/Scene/e_walls02_diffuse.png', objectPos[0]);
+
+				loadModel(33, 'Models/Scene/e_walls03_asset_001.obj', 'Textures/Scene/e_walls03_diffuse.png', objectPos[0]);
+				loadModel(34, 'Models/Scene/e_walls03_asset_002.obj', 'Textures/Scene/e_walls03_diffuse.png', objectPos[0]);
+
+				loadModel(35, 'Models/Scene/e_walls04_asset_001.obj', 'Textures/Scene/e_walls04_diffuse.png', objectPos[0]);
+
+				loadModel(36, 'Models/Scene/e_watermill_asset_001.obj', 'Textures/Scene/e_watermill_diffuse.png', objectPos[0]);
+
+				loadModel(37, 'Models/Scene/e_waterwheel_asset_001.obj', 'Textures/Scene/e_waterwheel_diffuse.png', objectPos[0]);
+
+				loadModel(37, 'Models/Scene/e_woodshed_asset_001.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(38, 'Models/Scene/e_woodshed_asset_002.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(39, 'Models/Scene/e_woodshed_asset_003.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(40, 'Models/Scene/e_woodshed_asset_004.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+
+				loadModel(41, 'Models/Scene/Collision/COLL_1.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(42, 'Models/Scene/Collision/COLL_2.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(43, 'Models/Scene/Collision/COLL_3.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(44, 'Models/Scene/Collision/COLL_4.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(45, 'Models/Scene/Collision/COLL_5.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(46, 'Models/Scene/Collision/COLL_6.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(47, 'Models/Scene/Collision/COLL_7.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(48, 'Models/Scene/Collision/COLL_8.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(49, 'Models/Scene/Collision/COLL_9.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(50, 'Models/Scene/Collision/COLL_10.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(51, 'Models/Scene/Collision/COLL_11.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+				loadModel(52, 'Models/Scene/Collision/COLL_12.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+
+				loadModel(52, 'Models/COLL_MAN.obj', 'Textures/Scene/e_woodshed_diffuse.png', objectPos[0]);
+
+
+				//modelNo, modelFile, pos
+				//loadTerrain(41, 'Models/Scene/Collision_Plane.obj', objectPos[1]);
+
+				//e_woodshed_asset_001.obj
+
+				//loadModel(noOfModels, 'Models/Player/male02.obj', 'Models/Player/ash_uvgrid01.jpg', objectPos[noOfModels]);
+				//noOfModels++;			
+				
+				// add helper
+				var geometry = new THREE.CylinderGeometry( 0, 20, 100, 3 );
+				geometry.applyMatrix( new THREE.Matrix4().makeTranslation( 0, 50, 0 ) );
+				geometry.applyMatrix( new THREE.Matrix4().makeRotationX( Math.PI / 2 ) );
+				helper = new THREE.Mesh( geometry, new THREE.MeshNormalMaterial() );
+				scene.add( helper );
+				
+				// create renderer
+				renderer = new THREE.WebGLRenderer();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				container.appendChild( renderer.domElement );
+				
+				renderer.gammaInput = true;
+				renderer.gammaOutput = true;
+				//renderer.shadowMapEnabled = true;
+
+				//renderer.shadowMapCascade = true;
+				//renderer.shadowMapType = THREE.PCFSoftShadowMap;
+				
+				// stats fps
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0px';
+				container.appendChild( stats.domElement );
+				
+				
+				//animation
+				myAnimation = new Animation( 0, 0, 0, 60 );
+				var loader = new THREE.JSONLoader();
+				//loader.load( "Models/knight.js", function ( geometry, materials ) { myAnimation.addAnimation( geometry, materials, 0) } );
+				//loader.load( "Models/human_walk_0_female.js", function ( geometry, materials ) { myAnimation.addAnimation( geometry, materials, 1) } );				
+				
+				// menu
+				menu.setMenu(scaleX, scaleY);	
+
+				// GUI
+				gui.setGUI(scaleX, scaleY);				
+								
+				// listeners
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+			
+				window.addEventListener( 'resize', onWindowResize, false );
+				
+				// md2 animation test
+				myMD2Animation = new MD2Animation(new THREE.Vector3(-1000,0,1500), "Models/ogro/");
+				//noOfModels++;	
+				bystander = new MD2Animation(new THREE.Vector3(300,0,2500), "Models/ogro/");
+
+				bystander2 = new MD2Animation(new THREE.Vector3(0,0,1500), "Models/ogro/");
+				bystander3 = new MD2Animation(new THREE.Vector3(200,0,1500), "Models/ogro/");
+				bystander4 = new MD2Animation(new THREE.Vector3(-400,0,2000), "Models/ogro/");
+				//noOfModels++;	
+
+				//Load in .obj cube that follows around main character and check collision on that
+			}
+
+			function loadModel2(modelNo, modelFile, textureFile, pos){
+				// texture
+
+				var texture = new THREE.Texture();
+
+				var loader = new THREE.ImageLoader( manager );
+				loader.load( textureFile, function ( image ) {
+
+					texture.image = image;
+					texture.needsUpdate = true;
+
+				} );
+
+				// model
+
+				var loader = new THREE.OBJLoader( manager );
+				loader.load( modelFile, function ( object ) {				
+				
+					// 
+					object.traverse( function ( child ) {
+
+						if ( child instanceof THREE.Mesh ) {
+
+							// add texture
+							child.material.map = texture;	
+
+							// work out boundingbox
+							//child.geometry.computeBoundingBox ();
+							//var bBox = child.geometry.boundingBox;
+
+							//createBoundingBox(modelNo, bBox, 1);							
+																			
+						}
+
+					} );
+
+					object.position = pos;
+					object.scale.set(2,2,2);
+					model[modelNo] = object;
+					scene.add( model[modelNo] );					
+					//objects.push( model[modelNo], 1);
+																							
+				} );
+				
+				
+			}
+			
+			function loadModel(modelNo, modelFile, textureFile, pos){
+				// texture
+
+				var texture = new THREE.Texture();
+
+				var loader = new THREE.ImageLoader( manager );
+				loader.load( textureFile, function ( image ) {
+
+					texture.image = image;
+					texture.needsUpdate = true;
+
+				} );
+
+				// model
+
+				var loader = new THREE.OBJLoader( manager );
+				loader.load( modelFile, function ( object ) {				
+				
+					// 
+					object.traverse( function ( child ) {
+
+						if ( child instanceof THREE.Mesh ) {
+
+							// add texture
+							child.material.map = texture;	
+
+							// work out boundingbox
+							child.geometry.computeBoundingBox ();
+							var bBox = child.geometry.boundingBox;
+
+							createBoundingBox(modelNo, bBox, 1);							
+																			
+						}
+
+					} );
+
+					object.position = pos;
+					object.scale.set(2,2,2);
+					model[modelNo] = object;
+					scene.add( model[modelNo] );					
+					//objects.push( model[modelNo], 1);
+																							
+				} );
+				
+				
+			}
+			
+			function createBoundingBox(modelNo, bBox, scale){
+				
+				modelOrigBox[modelNo].xMin = bBox.min.x * scale;
+				modelOrigBox[modelNo].yMin = bBox.min.y * scale;
+				modelOrigBox[modelNo].zMin = bBox.min.z * scale;
+				
+				modelOrigBox[modelNo].xMax = bBox.max.x * scale;
+				modelOrigBox[modelNo].yMax = bBox.max.y * scale;
+				modelOrigBox[modelNo].zMax = bBox.max.z * scale;
+
+			}
+			
+			function updateBoundingBox(modelNo){
+				modelBox[modelNo].xMin = modelOrigBox[0].xMin + model[modelNo].position.x;
+				modelBox[modelNo].yMin = modelOrigBox[0].yMin + model[modelNo].position.y;
+				modelBox[modelNo].zMin = modelOrigBox[0].zMin + model[modelNo].position.z;
+				
+				modelBox[modelNo].xMax = modelOrigBox[0].xMax + model[modelNo].position.x;
+				modelBox[modelNo].yMax = modelOrigBox[0].yMax + model[modelNo].position.y;
+				modelBox[modelNo].zMax = modelOrigBox[0].zMax + model[modelNo].position.z;
+			
+			}
+			
+			
+			function Collided(bb1, bb2)
+			{
+				
+				var collided;
+				
+				if(bb1.xMin < bb2.xMax && bb1.xMax > bb2.xMin &&
+					bb1.yMin < bb2.yMax && bb1.yMax > bb2.yMin &&
+					bb1.zMin < bb2.zMax && bb1.zMax > bb2.zMin ){
+					
+					collided = true;
+				}
+				else
+					collided = false;
+				
+				//console.log(bb1, bb2, collided);
+				return collided;
+			}
+			
+			function createTerrain() {
+						
+				// texture ground
+				var geometry = new THREE.PlaneGeometry( 7500, 7500, 1, 1 );
+				geometry.applyMatrix( new THREE.Matrix4().makeRotationX( - Math.PI / 2 ) );
+
+				// PLEASE NOTE!! With raycasting faces must be planar!  PlaneGeometry is made up of
+				// quads and now that we have changed the height value of the verts, the quads are no
+				// longer planar.  We must break it down into triangles in order to preserve this information.
+				THREE.GeometryUtils.triangulateQuads(geometry);
+
+				var texture = new THREE.Texture();
+
+				var loader = new THREE.ImageLoader( manager );
+				loader.load( 'Models/Terrain/floortexture.jpg', function ( image ) {
+
+					texture.image = image;
+					texture.wrapS = THREE.RepeatWrapping; 
+					texture.wrapT = THREE.RepeatWrapping;
+					texture.repeat.set( 75, 75);
+					texture.needsUpdate = true;
+
+				} );
+
+				mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { map: texture } ) );
+				//mesh.receiveShadow = true;
+				scene.add( mesh );
+			
+			}
+
+			function loadTerrain(modelNo, modelFile, pos) {
+
+				//Collision_Plane
+
+				// model
+
+				var loader = new THREE.OBJLoader( manager );
+				loader.load( modelFile, function ( object ) {				
+				
+					// 
+					object.traverse( function ( child ) {
+
+						if ( child instanceof THREE.Mesh ) {
+
+							// work out boundingbox
+							child.geometry.computeBoundingBox ();
+							var bBox = child.geometry.boundingBox;
+
+							createBoundingBox(modelNo, bBox, 1);							
+																			
+						}
+
+					} );
+
+					object.position = pos;
+					object.scale.set(2,2,2);
+
+
+					mesh = object;
+					scene.add(mesh);
+
+																							
+				} );
+
+				
+			}
+			
+			function onWindowResize() {
+				
+				// set scale via resolution
+				scaleX = window.innerWidth / resolutionX;
+				scaleY = window.innerHeight / resolutionY;
+				
+				// menu
+				if(gState == GameState.Menu){
+					menu.scale(scaleX, scaleY);
+				}
+				
+				// gui
+				if(gState == GameState.Game){
+					gui.scale(scaleX,scaleY);
+				}
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+			
+			function rayCastFromScreen(modelIntersect){
+			
+				var intersection;
+				raycastMouseX = ( mouseX / window.innerWidth ) * 2 - 1;
+				raycastMouseY = -( mouseY / window.innerHeight ) * 2 + 1;
+				
+				var vector = new THREE.Vector3( raycastMouseX, raycastMouseY, camera.near );
+
+				// Convert the [-1, 1] screen coordinate into a world coordinate on the near plane
+				var projector = new THREE.Projector();
+				projector.unprojectVector( vector, camera );
+
+				var raycaster = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
+				
+				// set intersect for ground
+				intersection = raycaster.intersectObject( modelIntersect );
+			
+				return intersection;
+			}
+
+			function onDocumentMouseMove( event ) {
+				
+				
+				mouseX = event.clientX;
+				mouseY = event.clientY;
+
+				
+				// check to see if mouse intercepts the models
+				//var intersects;
+				/*
+				for (var i = 0; i < noOfModels; i++){
+						intersects = raycaster.intersectObject( model[i], true);
+						if (intersects != false){
+							i = noOfModels;
+						}
+				}
+				*/
+				
+				/*
+				// Toggle rotation bool for meshes that we clicked
+				if ( groundIntersect.length > 0 ) {
+
+					helper.position.set( 0, 0, 0 );
+					helper.lookAt( groundIntersect[ 0 ].face.normal );
+
+					helper.position.copy( groundIntersect[ 0 ].point );
+							
+
+				}
+				*/
+
+			}
+			
+			function onDocumentMouseDown( event ) {
+			
+				switch (gState){
+					case GameState.Menu:
+						switch (event.which) {
+							case 1:		// left click
+								menu.mouseDown(mouseX, mouseY);
+								
+								break;
+							case 2:
+								//alert('Middle mouse button pressed');
+								break;
+							case 3:
+								//alert('Right mouse button pressed');
+								break;
+							default:
+								//alert('You have a strange mouse');
+						}				
+						break;
+					
+					case GameState.Game:
+						switch (event.which) {
+							case 1:		// left click
+								
+								// if mouse is on ground
+								if ( groundIntersect.length > 0 ) {
+									
+									// move animation
+									myMD2Animation.moveTo(groundIntersect[0].point);
+			
+									// set helper position and rotation
+									helper.position.set( 0, 0, 0 );
+									helper.lookAt( groundIntersect[ 0 ].face.normal );
+
+									helper.position.copy( groundIntersect[ 0 ].point );
+
+								}
+								
+								//alert('Left mouse button pressed');
+								break;
+							case 2:
+								//alert('Middle mouse button pressed');
+								break;
+							case 3:
+								//alert('Right mouse button pressed');
+								break;
+							default:
+								//alert('You have a strange mouse');
+						}
+						break;
+					default:
+						break;
+				}
+			}
+
+			function update() {
+			
+				switch (gState){
+					case GameState.Menu:
+						
+						menu.update(mouseX, mouseY);
+						
+						break;
+					case GameState.Game:
+					
+						// get intersection of ground
+						groundIntersect = rayCastFromScreen( mesh );
+					
+						// update sound
+						//sound1.Update(model[0].position);
+						//sound2.Update(model[0].position);
+
+						// update boundingbox
+						for (var i = 0; i < noOfModels; i++){
+						
+							// update bounding box
+							updateBoundingBox(i);
+						}
+						
+						// check collisions			
+						for (var i = 1; i < noOfModels; i++){
+							if(Collided(modelBox[0], modelBox[i])){
+								console.log("Hit!");
+								movePlayer = false;
+							}
+						}	
+
+						// get bystander to wander around
+						if(bystander.getMoving() == false)
+							bystander.moveTo(new THREE.Vector3((Math.random() * 3000) - 1500, 0, (Math.random() * 3000) - 1500));
+						
+						/*
+						//update animation class
+						if (Key.isDown(Key.a)){
+							myAnimation.setCurrentAnimation(0);
+							myAnimation.startCurrentAnimation();
+						}
+						
+						if (Key.isDown(Key.s)){
+							myAnimation.changeCurrentAnimation(0);
+						}
+						
+						if (Key.isDown(Key.d)){
+							myAnimation.changeCurrentAnimation(1);
+						}
+
+						if (Key.isDown(Key.w)){
+							myAnimation.removeCurrentAnimation();
+						}
+						*/
+						// md2 animation
+						/*
+						if(Key.isDown(Key.UP)){ myMD2Animation.setWalkForward(true)}else{ myMD2Animation.setWalkForward(false)};
+						if(Key.isDown(Key.DOWN)){ myMD2Animation.setWalkBackward(true)}else{ myMD2Animation.setWalkBackward(false)};
+						if(Key.isDown(Key.LEFT)){ myMD2Animation.setWalkLeft(true)}else{ myMD2Animation.setWalkLeft(false)};
+						if(Key.isDown(Key.RIGHT)){ myMD2Animation.setWalkRight(true)}else{ myMD2Animation.setWalkRight(false)};
+						*/
+						
+						// camera position and rotation
+						camera.position = new THREE.Vector3(myMD2Animation.character.root.position.x + 800, myMD2Animation.character.root.position.y + 1200, myMD2Animation.character.root.position.z + 800);
+						camera.lookAt( myMD2Animation.character.root.position );
+
+						model[51].position = myMD2Animation.character.root.position;
+						console.log(model[51].position);
+					
+						break;
+					default:
+						break;
+				}			
+			
+			}		
+			
+			function main() {
+
+				// keep game updating
+				requestAnimationFrame( main );
+				
+				// check if stuff is loaded
+				switch (gState){
+					case GameState.Loading:
+					
+						// check to see if all assets have loaded
+						if (/*myAnimation.loaded[myAnimation.noOfMeshes - 1] == true &&*/ twoDAssets.loaded == true){
+							gState = GameState.Menu; // meant to be .MENU
+						}
+					
+						break;
+					case GameState.Menu:
+						
+						if(menu.MenuStarted == false && menu.isLoaded() == true)
+							menu.startMenu();
+					
+						menu.update(mouseX, mouseY);
+						
+						render();
+						
+						// fps stats
+						//stats.update();
+							
+						break;
+					case GameState.Game:
+					
+						// set up game stuff
+						if(gui.MenuStarted == false)
+							gui.startGUI();
+
+						// update
+						update();
+						
+						render();
+						
+						// fps stats
+						//stats.update();
+					
+					
+						break;
+					default:
+					
+						break;
+						
+				}
+
+			}						
+
+			function render() {
+
+				var delta = clock.getDelta();
+				
+				// update animation class
+				THREE.AnimationHandler.update( delta );
+				
+				// update MD2 animation (including movement)
+				myMD2Animation.character.update(delta);
+				bystander.character.update(delta);
+				bystander2.character.update(delta);
+				bystander2.character.update(delta);
+				bystander4.character.update(delta);
+				
+				// render scene via camera
+				renderer.render( scene, camera );
+				
+				// debug
+				//ctx = WebGLDebugUtils.makeDebugContext(canvas.getContext("webgl"));
+
+			}
+
+		</script>
+
+	</body>
+</html>
